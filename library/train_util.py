@@ -959,6 +959,9 @@ class BaseDataset(torch.utils.data.Dataset):
 
         example["latents"] = torch.stack(latents_list) if latents_list[0] is not None else None
 
+        target_size = images.size() if images else example["latents"].size()
+        assert masks.size() == target_size, f"mask({masks.size()}) should have same size with {target_size}"
+
         if self.debug_dataset:
             example["image_keys"] = bucket[image_index : image_index + self.batch_size]
             example["captions"] = captions
