@@ -543,7 +543,10 @@ def train(args):
                 else:
                     target = noise
 
+                mask = batch["masks"].float()
+
                 loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="none")
+                loss = loss * mask
                 loss = loss.mean([1, 2, 3])
 
                 loss_weights = batch["loss_weights"]  # 各sampleごとのweight

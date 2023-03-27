@@ -302,7 +302,10 @@ def train(args):
                 else:
                     target = noise
 
+                mask = batch["masks"].float()
+
                 loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
+                loss = loss * mask
 
                 accelerator.backward(loss)
                 if accelerator.sync_gradients and args.max_grad_norm != 0.0:

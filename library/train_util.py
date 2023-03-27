@@ -77,12 +77,13 @@ IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".PNG", ".JPG", ".
 
 
 class ImageInfo:
-    def __init__(self, image_key: str, num_repeats: int, caption: str, is_reg: bool, absolute_path: str) -> None:
+    def __init__(self, image_key: str, num_repeats: int, caption: str, is_reg: bool, absolute_path: str, mask_path: Optional[str]=None) -> None:
         self.image_key: str = image_key
         self.num_repeats: int = num_repeats
         self.caption: str = caption
         self.is_reg: bool = is_reg
         self.absolute_path: str = absolute_path
+        self.mask_path: Optional[str] = mask_path
         self.image_size: Tuple[int, int] = None
         self.resized_size: Tuple[int, int] = None
         self.bucket_reso: Tuple[int, int] = None
@@ -640,10 +641,10 @@ class BaseDataset(torch.utils.data.Dataset):
         random.shuffle(self.buckets_indices)
         self.bucket_manager.shuffle()
 
-    def load_image(self, image_path):
+    def load_image(self, image_path, mode="RGB"):
         image = Image.open(image_path)
-        if not image.mode == "RGB":
-            image = image.convert("RGB")
+        if not image.mode == mode:
+            image = image.convert(mode)
         img = np.array(image, np.uint8)
         return img
 
@@ -818,6 +819,7 @@ class BaseDataset(torch.utils.data.Dataset):
         input_ids_list = []
         latents_list = []
         images = []
+        masks = []
 
         for image_key in bucket[image_index : image_index + bucket_batch_size]:
             image_info = self.image_data[image_key]
@@ -866,7 +868,19 @@ class BaseDataset(torch.utils.data.Dataset):
                 latents = None
                 image = self.image_transforms(img)  # -1.0~1.0のtorch.Tensorになる
 
+            if image_info.mask_path:
+                mask = self.load_image(image_info.mask_path)
+                transform = transforms.Compose([
+                    transforms.ToTensor()
+                ])
+                mask = transform(mask).float() * 2
+            else:
+                mask = torch.tensor((), dtype=torch.float)
+                mask = mask.new_ones(image.size())
+
+            assert image.size() == mask.size(), "mask and image should have same size"
             images.append(image)
+            masks.append(mask)
             latents_list.append(latents)
 
             caption = self.process_caption(subset, image_info.caption)
@@ -887,9 +901,13 @@ class BaseDataset(torch.utils.data.Dataset):
         if images[0] is not None:
             images = torch.stack(images)
             images = images.to(memory_format=torch.contiguous_format).float()
+
+            masks = torch.stack(masks)
+            masks = images.to(memory_format=torch.contiguous_format).float()
         else:
             images = None
         example["images"] = images
+        example["masks"] = masks
 
         example["latents"] = torch.stack(latents_list) if latents_list[0] is not None else None
 
@@ -1015,7 +1033,14 @@ class DreamBoothDataset(BaseDataset):
                 num_train_images += subset.num_repeats * len(img_paths)
 
             for img_path, caption in zip(img_paths, captions):
-                info = ImageInfo(img_path, subset.num_repeats, caption, subset.is_reg, img_path)
+                org_stem = pathlib.Path(img_path).stem
+                mask_path = pathlib.Path(img_path).with_stem(org_stem + "_mask")
+                if mask_path.exists():
+                    mask_path = str(mask_path)
+                else:
+                    mask_path = None
+
+                info = ImageInfo(img_path, subset.num_repeats, caption, subset.is_reg, img_path, mask_path)
                 if subset.is_reg:
                     reg_infos.append(info)
                 else:
@@ -1114,6 +1139,13 @@ class FineTuningDataset(BaseDataset):
                         assert len(abs_path) >= 1, f"no image / 画像がありません: {image_key}"
                         abs_path = abs_path[0]
 
+                org_stem = pathlib.Path(abs_path).stem
+                mask_path = pathlib.Path(abs_path).with_stem(org_stem + "_mask")
+                if mask_path.exists():
+                    mask_path = str(mask_path)
+                else:
+                    mask_path = None
+
                 caption = img_md.get("caption")
                 tags = img_md.get("tags")
                 if caption is None:
@@ -1125,7 +1157,7 @@ class FineTuningDataset(BaseDataset):
                 if caption is None:
                     caption = ""
 
-                image_info = ImageInfo(image_key, subset.num_repeats, caption, False, abs_path)
+                image_info = ImageInfo(image_key, subset.num_repeats, caption, False, abs_path, mask_path)
                 image_info.image_size = img_md.get("train_resolution")
 
                 if not subset.color_aug and not subset.random_crop:
