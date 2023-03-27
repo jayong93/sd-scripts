@@ -909,15 +909,21 @@ class BaseDataset(torch.utils.data.Dataset):
 
             if image_info.mask_path:
                 mask = self.load_image(image_info.mask_path)
+                target_size = image.size() if image else latents.size()
                 transform = transforms.Compose([
-                    transforms.ToTensor()
+                    transforms.ToTensor(),
+                    transforms.Resize(target_size[-2:])
                 ])
                 mask = transform(mask).float() * 2
+                if mask.size()[0] != target_size[0]:
+                    mask = mask[0,:,:].repeat(target_size[0],1,1)
             else:
                 mask = torch.tensor((), dtype=torch.float)
-                mask = mask.new_ones(image.size())
+                if image:
+                    mask = mask.new_ones(image.size())
+                else:
+                    mask = mask.new_ones(latents.size())
 
-            assert image.size() == mask.size(), "mask and image should have same size"
             images.append(image)
             masks.append(mask)
             latents_list.append(latents)
@@ -941,10 +947,13 @@ class BaseDataset(torch.utils.data.Dataset):
             images = torch.stack(images)
             images = images.to(memory_format=torch.contiguous_format).float()
 
-            masks = torch.stack(masks)
-            masks = images.to(memory_format=torch.contiguous_format).float()
         else:
             images = None
+
+
+        masks = torch.stack(masks)
+        masks = masks.to(memory_format=torch.contiguous_format).float()
+
         example["images"] = images
         example["masks"] = masks
 
