@@ -914,7 +914,7 @@ class BaseDataset(torch.utils.data.Dataset):
                     transforms.ToTensor(),
                     transforms.Resize(target_size[-2:])
                 ])
-                mask = transform(mask).float() * 2
+                mask = transform(mask).float() * 5
                 if mask.size()[0] != target_size[0]:
                     mask = mask[0,:,:].repeat(target_size[0],1,1)
             else:
