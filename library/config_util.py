@@ -47,6 +47,7 @@ def add_config_arguments(parser: argparse.ArgumentParser):
 @dataclass
 class BaseSubsetParams:
   image_dir: Optional[str] = None
+  mask_dir: Optional[str] = None
   num_repeats: int = 1
   shuffle_caption: bool = False
   keep_tokens: int = 0
@@ -133,6 +134,7 @@ class ConfigSanitizer:
 
   # subset schema
   SUBSET_ASCENDABLE_SCHEMA = {
+    "mask_dir": str,
     "color_aug": bool,
     "face_crop_aug_range": functools.partial(__validate_and_convert_twodim.__func__, float),
     "flip_aug": bool,
@@ -400,6 +402,7 @@ def generate_dataset_group_by_blueprint(dataset_group_blueprint: DatasetGroupBlu
       info += indent(dedent(f"""\
         [Subset {j} of Dataset {i}]
           image_dir: "{subset.image_dir}"
+          mask_dir: "{subset.mask_dir}"
           image_count: {subset.img_count}
           num_repeats: {subset.num_repeats}
           shuffle_caption: {subset.shuffle_caption}

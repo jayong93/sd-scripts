@@ -267,6 +267,7 @@ class BaseSubset:
     def __init__(
         self,
         image_dir: Optional[str],
+        mask_dir: Optional[str],
         num_repeats: int,
         shuffle_caption: bool,
         keep_tokens: int,
@@ -281,6 +282,7 @@ class BaseSubset:
         token_warmup_step: Union[float, int],
     ) -> None:
         self.image_dir = image_dir
+        self.mask_dir = mask_dir
         self.num_repeats = num_repeats
         self.shuffle_caption = shuffle_caption
         self.keep_tokens = keep_tokens
@@ -302,6 +304,7 @@ class DreamBoothSubset(BaseSubset):
     def __init__(
         self,
         image_dir: str,
+        mask_dir: Optional[str],
         is_reg: bool,
         class_tokens: Optional[str],
         caption_extension: str,
@@ -322,6 +325,7 @@ class DreamBoothSubset(BaseSubset):
 
         super().__init__(
             image_dir,
+            mask_dir,
             num_repeats,
             shuffle_caption,
             keep_tokens,
@@ -350,6 +354,7 @@ class FineTuningSubset(BaseSubset):
     def __init__(
         self,
         image_dir,
+        mask_dir: Optional[str],
         metadata_file: str,
         num_repeats,
         shuffle_caption,
@@ -368,6 +373,7 @@ class FineTuningSubset(BaseSubset):
 
         super().__init__(
             image_dir,
+            mask_dir,
             num_repeats,
             shuffle_caption,
             keep_tokens,
@@ -1103,12 +1109,15 @@ class DreamBoothDataset(BaseDataset):
                 num_train_images += subset.num_repeats * len(img_paths)
 
             for img_path, caption in zip(img_paths, captions):
-                org_stem = pathlib.Path(img_path).stem
-                mask_path = pathlib.Path(img_path).with_stem(org_stem + "_mask")
-                if mask_path.exists():
-                    mask_path = str(mask_path)
-                else:
+                org_name = pathlib.Path(img_path).name
+                if not subset.mask_dir:
                     mask_path = None
+                else:
+                    mask_path = pathlib.Path(subset.mask_dir) / org_name
+                    if mask_path.exists():
+                        mask_path = str(mask_path)
+                    else:
+                        mask_path = None
 
                 info = ImageInfo(img_path, subset.num_repeats, caption, subset.is_reg, img_path, mask_path)
                 if subset.is_reg:
@@ -1211,12 +1220,15 @@ class FineTuningDataset(BaseDataset):
                         assert len(abs_path) >= 1, f"no image / 画像がありません: {image_key}"
                         abs_path = abs_path[0]
 
-                org_stem = pathlib.Path(abs_path).stem
-                mask_path = pathlib.Path(abs_path).with_stem(org_stem + "_mask")
-                if mask_path.exists():
-                    mask_path = str(mask_path)
-                else:
+                org_name = pathlib.Path(abs_path).name
+                if not subset.mask_dir:
                     mask_path = None
+                else:
+                    mask_path = pathlib.Path(subset.mask_dir) / org_name
+                    if mask_path.exists():
+                        mask_path = str(mask_path)
+                    else:
+                        mask_path = None
 
                 caption = img_md.get("caption")
                 tags = img_md.get("tags")
